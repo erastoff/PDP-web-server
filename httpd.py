@@ -1,11 +1,11 @@
 import argparse
 import concurrent.futures
+import http.client
 import logging
 import os
 import socket
 import threading
 import time
-import http.client
 from urllib.parse import unquote
 
 CONTENT_TYPES = (".html", ".css", ".js", ".jpg", ".jpeg", ".png", ".gif", ".swf")
@@ -55,21 +55,27 @@ class OTUServer:
     def do_GET(self, request_data):
         logging.info("GET-request accepted")
 
-        # Извлекаем путь из запроса (пример: /httptest/filename)
+        # Fetch path from request (example: /httptest/filename)
         path_param = ""
         if "GET /" in request_data:
             start_index = request_data.find("GET /") + len("GET ")
             end_index = request_data.find(" HTTP/1.1")
             path_param = request_data[start_index:end_index]
 
-        # Полный путь к запрошенному файлу
+        # Full file path
         file_path = os.path.join(
             os.path.abspath(os.path.dirname(__file__)), unquote(path_param)
         ).lstrip("/")
         file_path = DOCUMENT_ROOT + file_path
 
-        if os.path.exists(file_path) and os.path.isfile(file_path):
-            # Отправляем содержимое файла в ответе
+        if os.path.exists(file_path):  # and os.path.isfile(file_path):
+            if not os.path.isfile(file_path):
+                file_path = file_path + "index.html"
+            if not os.path.isfile(file_path):
+                response_headers = self.create_response_headers(
+                    code=NOT_FOUND, cl=0, ct="text/html"
+                )
+                return response_headers, ""
             with open(file_path, "rb") as file:
                 file_content = file.read()
                 file_name = file_path.split("/")[-1]
@@ -78,13 +84,11 @@ class OTUServer:
                 response_headers = self.create_response_headers(
                     code=OK, cl=len(file_content), ct=content_type
                 )
-                print("Response response (GET): ")
-                print(response_headers)
                 with open(new_file_path, "w") as new_file:
                     new_file.write(file_content.decode("utf-8"))
                 return response_headers, file_content.decode("utf-8")
         else:
-            # Если файл не найден, возвращаем код состояния 404 (Not Found)
+            # If file doesn't exist
             response_headers = self.create_response_headers(
                 code=NOT_FOUND, cl=0, ct="text/html"
             )
@@ -108,13 +112,12 @@ class OTUServer:
             cl = 0
             ct = content_type
         response_headers = self.create_response_headers(code=code, cl=cl, ct=ct)
-        print("Response response (HEAD): ")
+        print("Response response (HEAD): \n")
         print(response_headers)
         return response_headers, ""
 
     def handle_request(self, client_socket):
         request_data = client_socket.recv(1024).decode("utf-8")
-
         print("Received request:")
         print(request_data)
         logging.info("Received request: " + request_data)
@@ -133,11 +136,9 @@ class OTUServer:
                 "Content-Type: text/html\n"
                 "Connection: keep-alive\n\n"
             )
-            print("Response headers (unsupported request): ")
-            print(response_headers)
-            # return
             response_body = ""
-
+        print("Response:")
+        print(response_headers)
         client_socket.sendall((response_headers + response_body).encode("utf-8"))
 
     def serve_forever(self):
@@ -147,7 +148,7 @@ class OTUServer:
         server_socket.listen(5)
         self.running = True
 
-        print(f"Server listening on port {self.port}...")
+        print(f"Server listening on port {self.port}...\n")
         logging.info(f"Server listening on port {self.port}...")
 
         with concurrent.futures.ThreadPoolExecutor(
@@ -157,11 +158,11 @@ class OTUServer:
                 while self.running:
                     client_socket, client_address = server_socket.accept()
                     ##########################################
-                    active_threads = executor._threads
-                    # Выводим количество активных потоков
-                    print("Number of active threads in the pool:", len(active_threads))
-                    ##########################################
-                    # Запуск обработки запроса в пуле потоков
+                    # active_threads = executor._threads
+                    # # Print number of threads
+                    # print("Number of active threads in the pool:", len(active_threads))
+                    # ##########################################
+                    # Run request processing in threads pool
                     executor.submit(self.handle_request, client_socket)
 
             except KeyboardInterrupt:
@@ -170,25 +171,6 @@ class OTUServer:
             finally:
                 if server_socket:
                     server_socket.close()
-
-        # try:
-        #     while True:
-        #         client_socket, client_address = server_socket.accept()
-        #
-        #         logging.info(f"Connection from {client_address}")
-        #
-        #         # self.handle_request(client_socket)
-        #         client_thread = threading.Thread(
-        #             target=self.handle_request, args=(client_socket,)
-        #         )
-        #         client_thread.start()
-        #
-        #         # client_socket.close()
-        # except KeyboardInterrupt:
-        #     print("Server shutting down...")
-        #     logging.info("Server shutting down...")
-        # finally:
-        #     server_socket.close()
 
     def request(self, method, path):
         request = f"{method} {path} HTTP/1.1\r\nHost: {self.host}:{self.port}\r\n\r\n"
@@ -199,11 +181,11 @@ class OTUServer:
             return response
 
     def getresponse(self, conn):
-        return conn.getresponse()
+        return conn.request()
 
     def shutdown(self):
         self.running = False
-        # Закрытие сокета сервера
+        # Closing server's socket
         if self.server_socket:
             self.server_socket.close()
 
@@ -219,8 +201,6 @@ if __name__ == "__main__":
     args = parser.parse_args()
     N_WORKERS = args.workers or N_WORKERS
     DOCUMENT_ROOT = args.root or DOCUMENT_ROOT
-    print(N_WORKERS, DOCUMENT_ROOT)
-    # config_path = args.config
 
     logging.basicConfig(
         filename="log",
