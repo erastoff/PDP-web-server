@@ -13,7 +13,7 @@ from httpd import OTUServer
 
 class HttpServer(unittest.TestCase):
     host = "localhost"
-    port = 8003
+    port = 80
 
     def setUp(self):
         self.conn = httplib.HTTPConnection(self.host, self.port, timeout=10)
@@ -24,7 +24,7 @@ class HttpServer(unittest.TestCase):
     def tearDown(self):
         self.conn.close()
         self.server.shutdown()
-        time.sleep(0.4)
+        time.sleep(0.5)
         concurrent.futures.wait(self.server.worker_threads)
 
     def test_empty_request(self):

@@ -32,7 +32,6 @@ class Response:
             if ":" in line:
                 key, value = line.split(":", 1)
                 response_headers_dict[key] = value
-        # print(response_headers_dict)
         return response_headers_dict
 
     def read(self):
@@ -68,9 +67,6 @@ class OTUServer:
         abs_root_path = os.path.abspath(base_path)
         abs_path = os.path.abspath(os.path.join(DOCUMENT_ROOT, path))
         abs_path = os.path.split(abs_path)[0]
-        print("ROOT PATH: ", abs_root_path)
-        print("WORK PATH: ", abs_path)
-        # print(os.path.exists(abs_path), abs_path.startswith(abs_root_path))
         if os.path.exists(abs_path):
             return abs_path.startswith(abs_root_path)
         return False
@@ -103,7 +99,6 @@ class OTUServer:
             f"Content-Type: {ct}\r\n"
             f"Connection: {conn}\r\n\r\n"
         )
-
         return response_headers.encode()
 
     def do_GET(self, request_data):
@@ -148,7 +143,6 @@ class OTUServer:
                     headers=response_headers,
                     body=b"",
                 )
-                # return response.headers, ""
                 return response
             with open(file_path, "rb") as file:
                 file_content = file.read()
@@ -283,38 +277,23 @@ class OTUServer:
 
     def handle_request(self, client_socket):
         request_data = client_socket.recv(1024).decode("utf-8")
-        print("Received request:")
-        print(request_data)
         logging.info("Received request: " + request_data)
-        # while not self.shutdown_event.is_set():
         if request_data[:3] == "GET":
             response = self.do_GET(request_data)
         elif request_data[:4] == "HEAD":
             response = self.do_HEAD(request_data)
         else:
             logging.info("An unsupported request was received")
-            # Rebuild
             response_headers = self.create_response_headers(
                 code=INVALID_REQUEST, cl=0, ct="text/html"
             )
-            # response_headers = (
-            #     "HTTP/1.1 405 NOT_ALLOWED\n"
-            #     f"Date: {time.strftime('%a, %d %b %Y %H:%M:%S GMT')}\n"
-            #     "Server: SimpleServer\n"
-            #     f"Content-Length: 0\n"
-            #     "Content-Type: text/html\n"
-            #     "Connection: keep-alive\n\n"
-            # )
-            # response_body = ""
             response = Response(
                 INVALID_REQUEST.split()[0],
                 INVALID_REQUEST.split()[1],
                 headers=response_headers,
                 body=b"",
             )
-        print("Response:")
-        print(response.headers.decode("utf-8"))
-        # client_socket.sendall((response.headers + response.body).encode("utf-8"))
+        logging.info("Response: " + response.headers.decode("utf-8"))
         client_socket.sendall(response.headers + response.body)
         client_socket.close()
 
@@ -343,6 +322,7 @@ class OTUServer:
 
             except KeyboardInterrupt:
                 print("Server shutting down...")
+                logging.info("Server shutting down...")
                 self.shutdown()
                 concurrent.futures.wait(self.worker_threads)
 
@@ -350,28 +330,11 @@ class OTUServer:
                 if self.server_socket:
                     self.server_socket.close()
 
-    # def request(self, method, path):
-    #     request = f"{method} {path} HTTP/1.1\r\nHost: {self.host}:{self.port}\r\n\r\n"
-    #     with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as client_socket:
-    #         client_socket.connect((self.host, self.port))
-    #         client_socket.sendall(request.encode())
-    #         # response = client_socket.recv(4096).decode()
-    #         # return response
-    #
-    # def getresponse(self):
-    #     client_socket, _ = self.server_socket.accept()
-    #     request_data = client_socket.recv(1024).decode("utf-8")
-    #     response_headers, response_body = self.handle_request(request_data)
-    #     response = response_headers + response_body
-    #     client_socket.sendall(response.encode("utf-8"))
-    #     client_socket.close()
-
     def shutdown(self):
         self.running = False
         # Closing server's socket
         if self.server_socket:
             self.server_socket.close()
-        # self.shutdown_event.set()
 
 
 if __name__ == "__main__":
