@@ -1,5 +1,4 @@
 #!/usr/bin/env python
-import concurrent.futures
 import re
 import socket
 import http.client as httplib
