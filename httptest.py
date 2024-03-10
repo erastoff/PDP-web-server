@@ -24,8 +24,8 @@ class HttpServer(unittest.TestCase):
     def tearDown(self):
         self.conn.close()
         self.server.shutdown()
-        time.sleep(0.5)
-        concurrent.futures.wait(self.server.worker_threads)
+        time.sleep(0.3)
+        # concurrent.futures.wait(self.server.worker_threads)
 
     def test_empty_request(self):
         """Send bad http headers"""

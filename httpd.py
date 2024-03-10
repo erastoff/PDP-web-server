@@ -335,6 +335,7 @@ class OTUServer:
         # Closing server's socket
         if self.server_socket:
             self.server_socket.close()
+        concurrent.futures.wait(self.worker_threads)
 
 
 if __name__ == "__main__":
