@@ -29,7 +29,7 @@ class HttpServer(unittest.TestCase):
         # self.server_thread.join()
         self.conn.close()  # Закрываем соединение
         self.server.shutdown()
-        time.sleep(0.2)
+        time.sleep(0.5)
         # self.server_thread.join()  # Ждем завершения потока сервера
 
         # Ожидать завершения всех воркеров
