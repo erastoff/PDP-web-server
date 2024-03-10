@@ -37,7 +37,6 @@ class HttpServer(unittest.TestCase):
 
     def test_server_header(self):
         """Server header exists"""
-        print("TEST: test_server_header")
         self.conn.request("GET", "/httptest/")
         r = self.conn.getresponse()
         data = r.read()
@@ -46,7 +45,6 @@ class HttpServer(unittest.TestCase):
 
     def test_directory_index(self):
         """directory index file exists"""
-        print("TEST: test_directory_index")
         self.conn.request("GET", "/httptest/dir2/")
         r = self.conn.getresponse()
         data = r.read()
@@ -61,7 +59,6 @@ class HttpServer(unittest.TestCase):
         self.conn.request("GET", "/httptest/dir1/")
         r = self.conn.getresponse()
         data = r.read()
-        print("DATA", data)
         self.assertEqual(int(r.status), 404)
 
     def test_file_not_found(self):
@@ -141,7 +138,6 @@ class HttpServer(unittest.TestCase):
             "GET", "/httptest/../../../../../../../../../../../../../etc/passwd"
         )
         r = self.conn.getresponse()
-        print("STATUS: ", r.read())
         data = r.read()
         self.assertIn(int(r.status), (400, 403, 404))
 
