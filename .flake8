@@ -2,6 +2,6 @@
 exclude =
     migrations, venv
 
-ignore = F403,F405,F811,F841,E712
+ignore = F403,F405,F811,F841,E712,W605
 
 max-line-length = 120

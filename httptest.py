@@ -1,5 +1,6 @@
 #!/usr/bin/env python
 import concurrent.futures
+import re
 import socket
 import http.client as httplib
 import threading
@@ -15,27 +16,16 @@ class HttpServer(unittest.TestCase):
     port = 8003
 
     def setUp(self):
-        # self.conn = httplib.HTTPConnection(self.host, self.port, timeout=10)
-        # self.server = OTUServer(host=self.host, port=self.port)
-        # self.server.serve_forever()
-        #
         self.conn = httplib.HTTPConnection(self.host, self.port, timeout=10)
         self.server = OTUServer(host=self.host, port=self.port)
         self.server_thread = threading.Thread(target=self.server.serve_forever)
         self.server_thread.start()
 
     def tearDown(self):
-        # self.server.shutdown()
-        # self.server_thread.join()
-        self.conn.close()  # Закрываем соединение
+        self.conn.close()
         self.server.shutdown()
-        time.sleep(0.5)
-        # self.server_thread.join()  # Ждем завершения потока сервера
-
-        # Ожидать завершения всех воркеров
-        # self.server.executor.shutdown(wait=True)
+        time.sleep(0.4)
         concurrent.futures.wait(self.server.worker_threads)
-        # print("teardown RUNNING?: ", self.server.running)
 
     def test_empty_request(self):
         """Send bad http headers"""
@@ -101,16 +91,16 @@ class HttpServer(unittest.TestCase):
         data = r.read()
         self.assertEqual(int(r.status), 404)
 
-    # def test_file_with_query_string(self):
-    #     """query string after filename"""
-    #     self.conn.request("GET", "/httptest/dir2/page.html?arg1=value&arg2=value")
-    #     r = self.conn.getresponse()
-    #     data = r.read()
-    #     length = r.getheader("Content-Length")
-    #     self.assertEqual(int(r.status), 200)
-    #     self.assertEqual(int(length), 38)
-    #     self.assertEqual(len(data), 38)
-    #     self.assertEqual(data, b"<html><body>Page Sample</body></html>\n")
+    def test_file_with_query_string(self):
+        """query string after filename"""
+        self.conn.request("GET", "/httptest/dir2/page.html?arg1=value&arg2=value")
+        r = self.conn.getresponse()
+        data = r.read()
+        length = r.getheader("Content-Length")
+        self.assertEqual(int(r.status), 200)
+        self.assertEqual(int(length), 38)
+        self.assertEqual(len(data), 38)
+        self.assertEqual(data, b"<html><body>Page Sample</body></html>\n")
 
     def test_file_with_spaces(self):
         """filename with spaces"""
@@ -145,15 +135,15 @@ class HttpServer(unittest.TestCase):
         self.assertEqual(len(data), 954824)
         self.assertIn(b"Wikimedia Foundation, Inc.", data)
 
-    # def test_document_root_escaping(self):
-    #     """document root escaping forbidden"""
-    #     self.conn.request(
-    #         "GET", "/httptest/../../../../../../../../../../../../../etc/passwd"
-    #     )
-    #     r = self.conn.getresponse()
-    #     print("STATUS: ", r.read())
-    #     data = r.read()
-    #     self.assertIn(int(r.status), (400, 403, 404))
+    def test_document_root_escaping(self):
+        """document root escaping forbidden"""
+        self.conn.request(
+            "GET", "/httptest/../../../../../../../../../../../../../etc/passwd"
+        )
+        r = self.conn.getresponse()
+        print("STATUS: ", r.read())
+        data = r.read()
+        self.assertIn(int(r.status), (400, 403, 404))
 
     def test_file_with_dot_in_name(self):
         """file with two dots in name"""
@@ -172,37 +162,38 @@ class HttpServer(unittest.TestCase):
         data = r.read()
         self.assertIn(int(r.status), (400, 405))
 
-    # def test_head_method(self):
-    #     """head method support"""
-    #
-    #     s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-    #     s.connect((self.host, self.port))
-    #     s.send(b"HEAD /httptest/dir2/page.html HTTP/1.0\r\n\r\n")
-    #     data = b""
-    #     while 1:
-    #         buf = s.recv(1024)
-    #         if not buf:
-    #             break
-    #         data += buf
-    #     s.close()
-    #
-    #     self.assertTrue(data.find(b"\r\n\r\n") > 0, "no empty line with CRLF found")
-    #     (head, body) = re.split(b"\r\n\r\n", data, 1)
-    #     headers = head.split(b"\r\n")
-    #     self.assertTrue(len(headers) > 0, "no headers found")
-    #
-    #     statusline = headers.pop(0)
-    #     (proto, code, status) = statusline.split(b" ")
-    #
-    #     h = {}
-    #     for k, v in enumerate(headers):
-    #         (name, value) = re.split(b"\s*:\s*", v, 1)
-    #         h[name] = value
-    #     if int(code) == 200:
-    #         self.assertEqual(int(h[b"Content-Length"]), 38)
-    #         self.assertEqual(len(body), 0)
-    #     else:
-    #         self.assertIn(int(code), (400, 405))
+    def test_head_method(self):
+        """head method support"""
+
+        s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+        s.connect((self.host, self.port))
+        s.send(b"HEAD /httptest/dir2/page.html HTTP/1.0\r\n\r\n")
+        data = b""
+        while 1:
+            buf = s.recv(1024)
+            if not buf:
+                break
+            data += buf
+        s.close()
+
+        self.assertTrue(data.find(b"\r\n\r\n") > 0, "no empty line with CRLF found")
+        (head, body) = re.split(b"\r\n\r\n", data, 1)
+        headers = head.split(b"\r\n")
+        self.assertTrue(len(headers) > 0, "no headers found")
+
+        statusline = headers.pop(0)
+        (proto, code, status) = statusline.split(b" ")
+
+        h = {}
+        for k, v in enumerate(headers):
+            (name, value) = re.split(b"\s*:\s*", v, 1)
+            h[name] = value
+
+        if int(code) == 200:
+            self.assertEqual(int(h[b"Content-Length"]), 38)
+            self.assertEqual(len(body), 0)
+        else:
+            self.assertIn(int(code), (400, 403, 405))
 
     def test_filetype_html(self):
         """Content-Type for .html"""

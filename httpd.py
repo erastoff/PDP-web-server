@@ -5,8 +5,9 @@ import os
 import socket
 import threading
 import time
-from functools import lru_cache
-from urllib.parse import unquote, parse_qs, urlparse
+
+# from functools import lru_cache
+from urllib.parse import unquote  # , parse_qs, urlparse
 
 CONTENT_TYPES = (".html", ".css", ".js", ".jpg", ".jpeg", ".png", ".gif", ".swf")
 OK = "200 OK"
@@ -16,38 +17,6 @@ NOT_FOUND = "404 NOT_FOUND"
 INVALID_REQUEST = "405 METHOD_NOT_ALLOWED"
 DOCUMENT_ROOT = "doc/"
 N_WORKERS = 4
-
-
-class Request:
-    def __init__(
-        self,
-        method,
-        target,
-        version,
-        headers,
-        rfile,
-        server_socket=None,
-    ):
-        self.method = method
-        self.target = target
-        self.version = version
-        self.headers = headers
-        self.rfile = rfile
-        self.server_socket = server_socket
-
-        @property
-        def path(self):
-            return self.url.path
-
-        @property
-        @lru_cache(maxsize=None)
-        def query(self):
-            return parse_qs(self.url.query)
-
-        @property
-        @lru_cache(maxsize=None)
-        def url(self):
-            return urlparse(self.target)
 
 
 class Response:
@@ -94,6 +63,19 @@ class OTUServer:
         self.worker_threads = worker_threads
 
     @staticmethod
+    def is_safe_path(base_path, path):
+        path = path.lstrip("/")
+        abs_root_path = os.path.abspath(base_path)
+        abs_path = os.path.abspath(os.path.join(DOCUMENT_ROOT, path))
+        abs_path = os.path.split(abs_path)[0]
+        print("ROOT PATH: ", abs_root_path)
+        print("WORK PATH: ", abs_path)
+        # print(os.path.exists(abs_path), abs_path.startswith(abs_root_path))
+        if os.path.exists(abs_path):
+            return abs_path.startswith(abs_root_path)
+        return False
+
+    @staticmethod
     def content_type(request_data):
         for item in CONTENT_TYPES:
             if item in request_data:
@@ -114,12 +96,12 @@ class OTUServer:
         code, server="OTUServer", cl=0, ct="text/html", conn="keep-alive"
     ):
         response_headers = (
-            f"HTTP/1.1 {code}\n"
-            f"Date: {time.strftime('%a, %d %b %Y %H:%M:%S GMT')}\n"
-            f"Server: {server}\n"
-            f"Content-Length: {cl}\n"
-            f"Content-Type: {ct}\n"
-            f"Connection: {conn}\n\n"
+            f"HTTP/1.1 {code}\r\n"
+            f"Date: {time.strftime('%a, %d %b %Y %H:%M:%S GMT')}\r\n"
+            f"Server: {server}\r\n"
+            f"Content-Length: {cl}\r\n"
+            f"Content-Type: {ct}\r\n"
+            f"Connection: {conn}\r\n\r\n"
         )
 
         return response_headers.encode()
@@ -132,9 +114,22 @@ class OTUServer:
         if "GET /" in request_data:
             start_index = request_data.find("GET /") + len("GET ")
             end_index = request_data.find(" HTTP/1.1")
+            if "?" in request_data:
+                end_index = request_data.find("?")
             path_param = request_data[start_index:end_index]
+            if not self.is_safe_path(DOCUMENT_ROOT, path_param):
+                response_headers = self.create_response_headers(
+                    code=FORBIDDEN, cl=0, ct="text/html"
+                )
+                response = Response(
+                    FORBIDDEN.split()[0],
+                    FORBIDDEN.split()[1],
+                    headers=response_headers,
+                    body=b"",
+                )
+                return response
 
-        # Full file path
+        # Full relative file path
         file_path = os.path.join(
             os.path.abspath(os.path.dirname(__file__)), unquote(path_param)
         ).lstrip("/")
@@ -186,32 +181,105 @@ class OTUServer:
             return response
 
     def do_HEAD(self, request_data):
+        # logging.info("HEAD-request accepted")
+        # content_type = self.content_type(request_data)
+        # try:
+        #     name = "unnamed user"
+        #     if "Head /?name=" in request_data:
+        #         start_index = request_data.find("GET /?name=") + len("GET /?name=")
+        #         end_index = request_data.find(" HTTP/1.1")
+        #         name = request_data[start_index:end_index]
+        #     response_body = f"Hello, {name}! This is a simple web server."
+        #     code = OK
+        #     cl = len(response_body)
+        #     ct = content_type
+        # except Exception:
+        #     code = NOT_FOUND
+        #     cl = 0
+        #     ct = content_type
+        # response_headers = self.create_response_headers(code=code, cl=cl, ct=ct)
+        # response = Response(
+        #     code.split()[0],
+        #     code.split()[1],
+        #     headers=response_headers,
+        #     body=b"",
+        # )
+        # print("Response response (HEAD): \n")
+        # print(response.headers.decode("utf-8"))
+        # return response
+
         logging.info("HEAD-request accepted")
-        content_type = self.content_type(request_data)
-        try:
-            name = "unnamed user"
-            if "Head /?name=" in request_data:
-                start_index = request_data.find("GET /?name=") + len("GET /?name=")
-                end_index = request_data.find(" HTTP/1.1")
-                name = request_data[start_index:end_index]
-            response_body = f"Hello, {name}! This is a simple web server."
-            code = OK
-            cl = len(response_body)
-            ct = content_type
-        except Exception:
-            code = NOT_FOUND
-            cl = 0
-            ct = content_type
-        response_headers = self.create_response_headers(code=code, cl=cl, ct=ct)
-        response = Response(
-            code.split()[0],
-            code.split()[1],
-            headers=response_headers,
-            body=b"",
-        )
-        print("Response response (HEAD): \n")
-        print(response.headers.decode("utf-8"))
-        return response
+
+        # Fetch path from request (example: /httptest/filename)
+        path_param = ""
+        if "HEAD /" in request_data:
+            start_index = request_data.find("HEAD /") + len("HEAD ")
+            end_index = request_data.find(" HTTP/1.1")
+            if "?" in request_data:
+                end_index = request_data.find("?")
+            path_param = request_data[start_index:end_index]
+            if not self.is_safe_path(DOCUMENT_ROOT, path_param):
+                response_headers = self.create_response_headers(
+                    code=FORBIDDEN, cl=0, ct="text/html"
+                )
+                response = Response(
+                    FORBIDDEN.split()[0],
+                    FORBIDDEN.split()[1],
+                    headers=response_headers,
+                    body=b"",
+                )
+                return response
+
+        # Full relative file path
+        file_path = os.path.join(
+            os.path.abspath(os.path.dirname(__file__)), unquote(path_param)
+        ).lstrip("/")
+        file_path = DOCUMENT_ROOT + file_path
+
+        if os.path.exists(file_path):  # and os.path.isfile(file_path):
+            if not os.path.isfile(file_path):
+                file_path = file_path + "index.html"
+            if not os.path.isfile(file_path):
+                response_headers = self.create_response_headers(
+                    code=NOT_FOUND, cl=0, ct="text/html"
+                )
+                response = Response(
+                    NOT_FOUND.split()[0],
+                    NOT_FOUND.split()[1],
+                    headers=response_headers,
+                    body=b"",
+                )
+                # return response.headers, ""
+                return response
+            with open(file_path, "rb") as file:
+                file_content = file.read()
+                # file_name = file_path.split("/")[-1]
+                # new_file_path = DOCUMENT_ROOT + "/" + file_name
+                content_type = self.content_type(file_path)
+                response_headers = self.create_response_headers(
+                    code=OK, cl=len(file_content), ct=content_type
+                )
+                response = Response(
+                    OK.split()[0],
+                    OK.split()[1],
+                    headers=response_headers,
+                    body=b"",
+                )
+                # with open(new_file_path, "w") as new_file:
+                #     new_file.write(file_content.decode("utf-8"))
+                return response
+        else:
+            # If file doesn't exist
+            response_headers = self.create_response_headers(
+                code=NOT_FOUND, cl=0, ct="text/html"
+            )
+            response = Response(
+                NOT_FOUND.split()[0],
+                NOT_FOUND.split()[1],
+                headers=response_headers,
+                body=b"",
+            )
+            return response
 
     def handle_request(self, client_socket):
         request_data = client_socket.recv(1024).decode("utf-8")
