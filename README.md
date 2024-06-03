@@ -1,12 +1,23 @@
 ## PDP-web-server (Python Developer Professional Course)
 
-### The fifth homework:
-##### Thread pool web-server
-<u>The terms of the task are given in the file homework.pdf.</u>
-<br></br>
+### Overview
+PDP Web Server is a multi-threaded (thread pool), Python-based HTTP server designed to handle multiple client requests efficiently. This server supports basic HTTP functionalities, including serving static files and handling directory index files.
+
+### Features
+- Multi-threaded request handling using concurrent.futures.ThreadPoolExecutor
+- Customizable number of worker threads
+- Support for serving static files (e.g., HTML, CSS, JS, images)
+- Directory index file support
+- Graceful shutdown with active connection termination
+- Configurable host and port settings
+- Automated tests to ensure server reliability
+
+### Prerequisites
+- Python 3.10+
+- Required Python packages: concurrent.futures, unittest, socket, os, logging
 
 
-
+### Load testing
 ~/PycharmProjects/PDP-web-server$ ab -n 50000 -c 100 -r http://localhost:8080/ \
 This is ApacheBench, Version 2.3 <$Revision: 1879490 $>\
 Copyright 1996 Adam Twiss, Zeus Technology Ltd, http://www.zeustech.net/ \
